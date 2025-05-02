@@ -1,3 +1,4 @@
+import os
 import csv
 import json
 
@@ -117,16 +118,22 @@ ESTADO_CONFIGURACAO_DOCUMENTO = {
                 'page_number': 0,
                 'coordinates': (50, 50, 440, 60),
             },
+        },
+        'AVCB': {
+            'valido_ate': {
+                'page_number': 0,
+                'coordinates': (80, 330, 300, 340),
+            },
+        },
+    },
+    'MG': {
+        'AVCB': {
+            'valido_ate': {
+                'page_number': 0,
+                'coordinates': (428, 162, 600, 182),
+            }
         }
     },
-    # 'MG': {
-    #     'AVCB': {
-    #         'valido_ate': {
-    #             'page_number': 0,
-    #             'coordinates': (),
-    #         }
-    #     }
-    # },
     'MA': {
         'Licença de Operação': {
             'valido_ate': {
@@ -208,12 +215,11 @@ def is_string_in_dict_values(input_string, input_dict):
     return matches
 
 
-def find_text_in_document(file_content, page_number=None, coordinates=None):
-    with pymupdf.open(stream=file_content) as doc:
+def find_text_in_document(filename, page_number=None, coordinates=None):
+    with pymupdf.open(filename) as doc:
         page = doc.load_page(page_number)
         region_rect = pymupdf.Rect(*coordinates) if coordinates else None
-        text = page.get_text('text', clip=region_rect).strip()
-    return text
+        return page.get_text('text', clip=region_rect).strip()
 
 
 def main():
@@ -289,10 +295,16 @@ def main():
                         document_config = ESTADO_CONFIGURACAO_DOCUMENTO[estado].get(item['item_checklist'])
 
                         if document_config:
-                            file_content = googledrive.download_file(arquivo_id)
+                            filename = f'documents/{arquivo_id}.pdf'
+                            if not os.path.exists(filename):
+                                googledrive = GoogleDrive()
+                                file_content = googledrive.download_file(arquivo_id)
 
-                            valido_ate = find_text_in_document(file_content, **document_config['valido_ate']) if 'valido_ate' in document_config else None
-                            orgao_ambiental = find_text_in_document(file_content, **document_config['orgao_ambiental']) if 'orgao_ambiental' in document_config else None
+                                with open(filename, 'wb') as f:
+                                    f.write(file_content)
+
+                            valido_ate = find_text_in_document(filename, **document_config['valido_ate']) if 'valido_ate' in document_config else None
+                            orgao_ambiental = find_text_in_document(filename, **document_config['orgao_ambiental']) if 'orgao_ambiental' in document_config else None
 
                     pasta['checklist'].append({
                         'item_checklist': item['item_checklist'],
@@ -379,13 +391,20 @@ def main():
             writer.writerow(row)
 
 
-if __name__ == "__main__":
-    main()
+def inspect_word(page, query):
+    words = [
+        word[:5]
+        for word in page.get_text('words')
+        if query in word[4].lower()
+    ]
+    print(json.dumps(words, indent=2, ensure_ascii=False))
 
+
+if __name__ == "__main__":
     # import os
-    # file_id = '1JDsdlAJ5TXQJdHGksqeNI_OAscIFqifg'
+    # file_id = '1d8BuVs5DP1nzawycBLJGiCbAkI0LQZsC'
     # page_number = 0
-    # coordinates = (50, 50, 440, 60),
+    # coordinates = (428, 162, 600, 182)
 
     # if not os.path.exists(f'documents/{file_id}.pdf'):
     #     googledrive = GoogleDrive()
@@ -396,8 +415,8 @@ if __name__ == "__main__":
 
     # with pymupdf.open(f'documents/{file_id}.pdf') as doc:
     #     page = doc.load_page(page_number)
-    #     print(page.rect.width, page.rect.height)
     #     region_rect = pymupdf.Rect(*coordinates) if coordinates else None
     #     text = page.get_text('text', clip=region_rect).strip()
-
-    # print(text)
+    #     print(text)
+    #     inspect_word(page, 'valid')
+    main()
